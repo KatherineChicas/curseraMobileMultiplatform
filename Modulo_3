@@ -1,0 +1,437 @@
+# Proyecto: Express API + Angular (Favorites + Redux)
+
+### `server/package.json`
+
+```json
+{
+  "name": "express-api-items",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}
+```
+
+### `server/.env.example`
+
+```
+PORT=3000
+```
+
+### `server/index.js`
+
+```js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const itemsRouter = require('./routes/items');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/items', itemsRouter);
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Express API running on http://localhost:${port}`));
+```
+
+### `server/routes/items.js`
+
+```js
+const express = require('express');
+const router = express.Router();
+
+// Mock data (puedes reemplazar por DB)
+const ITEMS = [
+  { id: 1, title: 'Historia corta', description: 'Una historia para leer en minutos', tags: ['cuento'] },
+  { id: 2, title: 'Artículo técnico', description: 'Sobre Angular y Redux', tags: ['angular','redux'] },
+  { id: 3, title: 'Novela romántica', description: 'Historia de amor', tags: ['romance'] },
+  { id: 4, title: 'Guía de viaje', description: 'Lugares para visitar', tags: ['viajes'] },
+  { id: 5, title: 'Recetas rápidas', description: 'Cocina pastel', tags: ['cocina'] }
+];
+
+// GET /api/items?q=texto
+router.get('/', (req, res) => {
+  const q = (req.query.q || '').toLowerCase().trim();
+
+  if (!q) {
+    return res.json(ITEMS);
+  }
+
+  const filtered = ITEMS.filter(it =>
+    it.title.toLowerCase().includes(q) ||
+    it.description.toLowerCase().includes(q) ||
+    (it.tags || []).some(t => t.toLowerCase().includes(q))
+  );
+
+  res.json(filtered);
+});
+
+module.exports = router;
+```
+
+---
+
+## Código del Frontend (Angular)
+
+> Dependencias clave: `@ngrx/store` para Redux.
+
+### `client/package.json` (fragmento)
+
+```json
+{
+  "name": "client-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "ng serve"
+  },
+  "dependencies": {
+    "@angular/animations": "^15.0.0",
+    "@angular/common": "^15.0.0",
+    "@angular/compiler": "^15.0.0",
+    "@angular/core": "^15.0.0",
+    "@angular/forms": "^15.0.0",
+    "@angular/platform-browser": "^15.0.0",
+    "@angular/platform-browser-dynamic": "^15.0.0",
+    "@angular/router": "^15.0.0",
+    "@ngrx/store": "^15.0.0",
+    "rxjs": "^7.5.0",
+    "zone.js": "^0.12.0"
+  }
+}
+```
+
+### `client/src/environments/environment.ts`
+
+```ts
+export const environment = {
+  production: false,
+  // configurable: pon aquí la URL de Ngrok o la URL pública de tu API
+  NGROK_URL: 'http://localhost:3000' // por defecto local
+};
+```
+
+### `client/src/app/services/api.service.ts`
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from '../../environments/environment';
+import { Observable } from 'rxjs';
+
+export interface Item { id: number; title: string; description: string; tags?: string[] }
+
+@Injectable({ providedIn: 'root' })
+export class ApiService {
+  private base = environment.NGROK_URL + '/api/items';
+  constructor(private http: HttpClient) {}
+
+  search(q: string): Observable<Item[]> {
+    let params = new HttpParams();
+    if (q) params = params.set('q', q);
+    return this.http.get<Item[]>(this.base, { params });
+  }
+}
+```
+
+### `client/src/app/services/settings.service.ts`
+
+```ts
+import { Injectable } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class SettingsService {
+  private KEY = 'app_username';
+
+  getUsername(): string | null {
+    return localStorage.getItem(this.KEY);
+  }
+
+  setUsername(name: string | null) {
+    if (name === null) localStorage.removeItem(this.KEY);
+    else localStorage.setItem(this.KEY, name);
+  }
+}
+```
+
+### `client/src/app/store/actions.ts`
+
+```ts
+import { createAction, props } from '@ngrx/store';
+import { Item } from '../services/api.service';
+
+export const readNow = createAction('[Favorites] Read Now', props<{ item: Item }>());
+export const removeReadNow = createAction('[Favorites] Remove ReadNow', props<{ id: number }>());
+```
+
+### `client/src/app/store/reducer.ts`
+
+```ts
+import { createReducer, on } from '@ngrx/store';
+import { readNow, removeReadNow } from './actions';
+import { Item } from '../services/api.service';
+
+export interface AppState { reading: Item[] }
+
+export const initialState: AppState = { reading: [] };
+
+export const appReducer = createReducer(
+  initialState,
+  on(readNow, (state, { item }) => ({ ...state, reading: [...state.reading, item] })),
+  on(removeReadNow, (state, { id }) => ({ ...state, reading: state.reading.filter(i => i.id !== id) }))
+);
+```
+
+### `client/src/app/store/selectors.ts`
+
+```ts
+import { createSelector, createFeatureSelector } from '@ngrx/store';
+import { AppState } from './reducer';
+
+export const selectApp = createFeatureSelector<AppState>('app');
+export const selectReading = createSelector(selectApp, s => s.reading);
+```
+
+### `client/src/app/app.module.ts` (relevantes)
+
+```ts
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { HttpClientModule } from '@angular/common/http';
+import { StoreModule } from '@ngrx/store';
+import { appReducer } from './store/reducer';
+import { AppComponent } from './app.component';
+import { ListComponent } from './components/list/list.component';
+import { FavoritesComponent } from './components/favorites/favorites.component';
+import { SettingsComponent } from './components/settings/settings.component';
+import { FormsModule } from '@angular/forms';
+
+@NgModule({
+  declarations: [AppComponent, ListComponent, FavoritesComponent, SettingsComponent],
+  imports: [BrowserModule, HttpClientModule, FormsModule, StoreModule.forRoot({ app: appReducer })],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule {}
+```
+
+### `client/src/app/components/list/list.component.ts`
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { ApiService, Item } from '../../services/api.service';
+import { SettingsService } from '../../services/settings.service';
+
+@Component({
+  selector: 'app-list',
+  templateUrl: './list.component.html',
+  styleUrls: ['./list.component.css']
+})
+export class ListComponent implements OnInit {
+  q = '';
+  items: Item[] = [];
+  favorites: number[] = JSON.parse(localStorage.getItem('favorites') || '[]');
+
+  constructor(private api: ApiService, public settings: SettingsService) {}
+
+  ngOnInit() {
+    this.search();
+  }
+
+  search() {
+    this.api.search(this.q).subscribe(res => this.items = res);
+  }
+
+  toggleFavorite(id: number) {
+    const favs = new Set(this.favorites);
+    if (favs.has(id)) favs.delete(id);
+    else favs.add(id);
+    this.favorites = Array.from(favs);
+    localStorage.setItem('favorites', JSON.stringify(this.favorites));
+  }
+
+  isFav(id: number) { return this.favorites.includes(id); }
+}
+```
+
+### `client/src/app/components/list/list.component.html`
+
+```html
+<div class="search-box">
+  <input [(ngModel)]="q" placeholder="Buscar..." />
+  <button (click)="search()">Buscar</button>
+</div>
+
+<ul class="items">
+  <li *ngFor="let it of items" class="card">
+    <h3>{{ it.title }}</h3>
+    <p>{{ it.description }}</p>
+
+    <button class="fav" (click)="toggleFavorite(it.id)">
+      <span *ngIf="isFav(it.id)" aria-hidden>★</span>
+      <span *ngIf="!isFav(it.id)" aria-hidden>☆</span>
+      Guardar
+    </button>
+
+    <button class="read" (click)="$any($event).dispatchEvent(new CustomEvent('read', { detail: it }))">Leer ahora</button>
+  </li>
+</ul>
+```
+
+> Nota: El `Leer ahora` envía un CustomEvent que será capturado por `AppComponent` para despachar al store (evita lógica de store en el componente list según la separación solicitada).
+
+### `client/src/app/components/list/list.component.css`
+
+```css
+.card { background: #fffaf0; border-radius: 12px; padding: 12px; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.04)}
+.search-box { display:flex; gap:8px; margin-bottom:10px }
+input { flex:1; padding:8px; border-radius:8px; border:1px solid rgba(0,0,0,0.08) }
+button { padding:8px 10px; border-radius:8px; border:none }
+.fav { background: #fde2e2 }
+.read { background: #e2f3fd }
+```
+
+### `client/src/app/components/favorites/favorites.component.ts`
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { ApiService, Item } from '../../services/api.service';
+import { Store } from '@ngrx/store';
+import { readNow } from '../../store/actions';
+import { SettingsService } from '../../services/settings.service';
+
+@Component({ selector: 'app-favorites', templateUrl: './favorites.component.html', styleUrls: ['./favorites.component.css'] })
+export class FavoritesComponent implements OnInit {
+  favIds: number[] = JSON.parse(localStorage.getItem('favorites') || '[]');
+  items: Item[] = [];
+
+  constructor(private api: ApiService, private store: Store, public settings: SettingsService) {}
+
+  ngOnInit() { this.loadFavorites(); }
+
+  loadFavorites() {
+    // Si son pocos ids, podemos llamar al endpoint con q por cada id o cargar todo y filtrar localmente
+    this.api.search('').subscribe(all => {
+      this.items = all.filter(a => this.favIds.includes(a.id));
+    });
+  }
+
+  onReadNow(item: Item) {
+    this.store.dispatch(readNow({ item }));
+  }
+}
+```
+
+### `client/src/app/components/favorites/favorites.component.html`
+
+```html
+<h2>Favoritos</h2>
+<ul>
+  <li *ngFor="let it of items">
+    <strong>{{it.title}}</strong>
+    <button (click)="onReadNow(it)">Leer ahora</button>
+  </li>
+</ul>
+```
+
+### `client/src/app/components/settings/settings.component.ts`
+
+```ts
+import { Component } from '@angular/core';
+import { SettingsService } from '../../services/settings.service';
+
+@Component({ selector: 'app-settings', templateUrl: './settings.component.html', styleUrls: ['./settings.component.css'] })
+export class SettingsComponent {
+  name = '';
+  constructor(private settings: SettingsService) {
+    this.name = settings.getUsername() || '';
+  }
+
+  save() { this.settings.setUsername(this.name || null); alert('Nombre guardado'); }
+}
+```
+
+### `client/src/app/components/settings/settings.component.html`
+
+```html
+<h2>Settings</h2>
+<label>Nombre de usuario:</label>
+<input [(ngModel)]="name" />
+<button (click)="save()">Guardar</button>
+```
+
+### `client/src/app/app.component.ts` (captura evento y muestra listado reactivo)
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { selectReading } from './store/selectors';
+
+@Component({ selector: 'app-root', templateUrl: './app.component.html' })
+export class AppComponent implements OnInit {
+  reading$ = this.store.select(selectReading);
+
+  constructor(private store: Store) {}
+
+  ngOnInit() {
+    // escucha custom events desde los hijos (List emite custom event 'read')
+    window.addEventListener('read', (ev: any) => {
+      // despacha usando la API de Redux aquí para no meter store en componentes pequeños
+      const detail = ev.detail;
+      this.store.dispatch({ type: '[Favorites] Read Now', item: detail });
+    });
+  }
+}
+```
+
+### `client/src/app/app.component.html`
+
+```html
+<div class="app-shell">
+  <header>
+    <h1>Mi App Pastel</h1>
+    <nav>
+      <a routerLink="/">Inicio</a>
+      <a routerLink="/favoritos">Favoritos</a>
+      <a routerLink="/settings">Settings</a>
+    </nav>
+  </header>
+
+  <main>
+    <router-outlet></router-outlet>
+
+    <section class="reading">
+      <h3>Leyendo ahora</h3>
+      <ul>
+        <li *ngFor="let r of reading$ | async">{{ r.title }}</li>
+      </ul>
+    </section>
+  </main>
+</div>
+```
+
+### `client/src/styles.css` (colores pasteles aplicados globalmente)
+
+```css
+:root{
+  --pastel-bg: #fff7f3;
+  --pastel-card: #fffaf0;
+  --pastel-accent: #dfeffd;
+  --pastel-ink: #3b3b3b;
+}
+body { background: var(--pastel-bg); color: var(--pastel-ink); font-family: system-ui, Arial; padding: 16px }
+header { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; background: var(--pastel-card); border-radius: 10px }
+nav a { margin-left:12px }
+.reading { position: fixed; right: 20px; top: 80px; background: var(--pastel-accent); padding: 10px; border-radius:12px }
