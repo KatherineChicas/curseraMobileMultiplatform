@@ -1,0 +1,554 @@
+# Proyecto: Express API + Angular App (Ngrok, favoritos, Redux-like)
+
+# BACKEND (Express)
+
+**backend/package.json**
+
+```json
+{
+  "name": "express-api-books",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
+```
+
+**backend/data/books.json**
+
+```json
+[
+  { "id": 1, "title": "Introducción a JavaScript", "author": "Ana Pérez", "tags": ["programación", "js"] },
+  { "id": 2, "title": "Node.js para Principiantes", "author": "Luis Gómez", "tags": ["node", "backend"] },
+  { "id": 3, "title": "Aprendiendo Angular", "author": "María López", "tags": ["angular", "frontend"] },
+  { "id": 4, "title": "Diseño Pastel y UX", "author": "Carla Ruiz", "tags": ["diseño", "ux"] },
+  { "id": 5, "title": "Estructuras de Datos", "author": "Pedro Castillo", "tags": ["algoritmos", "estructuras"] },
+  { "id": 6, "title": "CSS Avanzado", "author": "Jorge Mena", "tags": ["css", "estilos"] }
+]
+```
+
+**backend/server.js**
+
+```js
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+const DATA_PATH = path.join(__dirname, 'data', 'books.json');
+
+function loadBooks() {
+  const raw = fs.readFileSync(DATA_PATH, 'utf8');
+  return JSON.parse(raw);
+}
+
+// GET /api/books?search=texto
+app.get('/api/books', (req, res) => {
+  const { search = '' } = req.query;
+  const q = String(search).trim().toLowerCase();
+  const books = loadBooks();
+  if (!q) return res.json(books);
+
+  const filtered = books.filter(b => {
+    return (
+      (b.title && b.title.toLowerCase().includes(q)) ||
+      (b.author && b.author.toLowerCase().includes(q)) ||
+      (Array.isArray(b.tags) && b.tags.join(' ').toLowerCase().includes(q))
+    );
+  });
+  res.json(filtered);
+});
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
+```
+
+**backend/README.md**
+
+```
+# Backend
+
+1. cd backend
+2. npm install
+3. npm start
+
+Expone: GET /api/books?search=texto
+```
+
+---
+
+# FRONTEND (Angular - estructura mínima)
+
+> Este frontend es una estructura Angular minimal con TypeScript. Asumo que usas Angular CLI para crear el proyecto `ng new frontend` y luego reemplazas/añades los archivos siguientes.
+
+**frontend/package.json** (solo dependencias principales)
+
+```json
+{
+  "name": "frontend-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "ng serve --open"
+  },
+  "dependencies": {
+    "@angular/animations": "^15.0.0",
+    "@angular/common": "^15.0.0",
+    "@angular/compiler": "^15.0.0",
+    "@angular/core": "^15.0.0",
+    "@angular/forms": "^15.0.0",
+    "@angular/platform-browser": "^15.0.0",
+    "@angular/platform-browser-dynamic": "^15.0.0",
+    "@angular/router": "^15.0.0",
+    "rxjs": "^7.8.0",
+    "zone.js": "^0.12.0"
+  }
+}
+```
+
+## Models
+
+**src/app/models/book.ts**
+
+```ts
+export interface Book {
+  id: number;
+  title: string;
+  author: string;
+  tags?: string[];
+}
+```
+
+## Services
+
+**src/app/services/storage.service.ts**
+
+```ts
+import { Injectable } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class StorageService {
+  get(key: string): string | null {
+    return localStorage.getItem(key);
+  }
+  set(key: string, value: string) {
+    localStorage.setItem(key, value);
+  }
+  remove(key: string) {
+    localStorage.removeItem(key);
+  }
+}
+```
+
+**src/app/services/api.service.ts**
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { Book } from '../models/book';
+import { StorageService } from './storage.service';
+
+@Injectable({ providedIn: 'root' })
+export class ApiService {
+  constructor(private http: HttpClient, private storage: StorageService) {}
+
+  private getBaseUrl(): string {
+    // lee la URL de ngrok desde storage (configurable en Settings)
+    const v = this.storage.get('ngrok_url');
+    if (v && v.length) return v.replace(/\/$/, '');
+    return 'http://localhost:3000';
+  }
+
+  searchBooks(query: string): Observable<Book[]> {
+    const base = this.getBaseUrl();
+    const url = `${base}/api/books?search=${encodeURIComponent(query)}`;
+    return this.http.get<Book[]>(url);
+  }
+}
+```
+
+**src/app/services/store.service.ts** (Redux-like simple store)
+
+```ts
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { Book } from '../models/book';
+
+export interface AppState {
+  readingNow: Book[];
+}
+
+export type Action = { type: string; payload?: any };
+
+@Injectable({ providedIn: 'root' })
+export class StoreService {
+  private initial: AppState = { readingNow: [] };
+  private subject = new BehaviorSubject<AppState>(this.initial);
+  state$ = this.subject.asObservable();
+
+  getState(): AppState {
+    return this.subject.getValue();
+  }
+
+  dispatch(action: Action) {
+    const current = this.getState();
+    const next = reducer(current, action);
+    this.subject.next(next);
+  }
+}
+
+// reducer simple
+function reducer(state: AppState, action: Action): AppState {
+  switch (action.type) {
+    case 'ADD_READING': {
+      const book = action.payload as Book;
+      // evitar duplicados
+      const exists = state.readingNow.find(b => b.id === book.id);
+      if (exists) return state;
+      return { ...state, readingNow: [...state.readingNow, book] };
+    }
+    case 'REMOVE_READING': {
+      const id = action.payload as number;
+      return { ...state, readingNow: state.readingNow.filter(b => b.id !== id) };
+    }
+    default:
+      return state;
+  }
+}
+```
+
+## Components
+
+### App module & root
+
+**src/main.ts** and Angular bootstrap are assumed generados por Angular CLI. Aquí los archivos clave.
+
+**src/app/app.module.ts**
+
+```ts
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { HttpClientModule } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { AppComponent } from './app.component';
+import { BookListComponent } from './components/book-list/book-list.component';
+import { FavoritesComponent } from './components/favorites/favorites.component';
+import { SettingsComponent } from './components/settings/settings.component';
+
+@NgModule({
+  declarations: [AppComponent, BookListComponent, FavoritesComponent, SettingsComponent],
+  imports: [BrowserModule, HttpClientModule, FormsModule],
+  bootstrap: [AppComponent]
+})
+export class AppModule {}
+```
+
+**src/app/app.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { StoreService } from './services/store.service';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
+})
+export class AppComponent {
+  readingNow$ = this.store.state$;
+  constructor(private store: StoreService) {}
+}
+```
+
+**src/app/app.component.html**
+
+```html
+<div class="app-shell">
+  <header>
+    <h1>Biblioteca Pastel</h1>
+    <nav>
+      <a href="#books">Buscar</a>
+      <a href="#favorites">Favoritos</a>
+      <a href="#settings">Settings</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="books">
+      <app-book-list></app-book-list>
+    </section>
+
+    <section id="favorites">
+      <app-favorites></app-favorites>
+    </section>
+
+    <section id="reading-now">
+      <h2>En lectura (Redux store)</h2>
+      <ul>
+        <li *ngFor="let b of (readingNow$ | async)?.readingNow">
+          {{ b.title }} — {{ b.author }}
+        </li>
+      </ul>
+    </section>
+
+    <section id="settings">
+      <app-settings></app-settings>
+    </section>
+  </main>
+</div>
+```
+
+**src/app/app.component.css**
+
+```css
+:root{
+  --bg: #fffaf0;
+  --card: #f7f3ff;
+  --accent: #b9d6d6;
+  --muted: #9aa8a8;
+}
+body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: #333; }
+.app-shell header{ display:flex; justify-content:space-between; align-items:center; padding:1rem; background: linear-gradient(90deg,#f7f3ff,#fffaf0); border-radius:8px; }
+nav a{ margin-left:1rem; color:var(--muted); text-decoration:none }
+main{ padding:1rem }
+section{ margin-bottom:1.2rem }
+```
+
+### Book List Component (búsqueda funcando y favoritos)
+
+**src/app/components/book-list/book-list.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { ApiService } from '../../services/api.service';
+import { Book } from '../../models/book';
+import { StorageService } from '../../services/storage.service';
+import { StoreService } from '../../services/store.service';
+
+@Component({
+  selector: 'app-book-list',
+  templateUrl: './book-list.component.html',
+  styleUrls: ['./book-list.component.css']
+})
+export class BookListComponent {
+  query = '';
+  results: Book[] = [];
+  favorites: number[] = [];
+
+  constructor(private api: ApiService, private storage: StorageService, private store: StoreService) {
+    const fav = this.storage.get('favorites');
+    this.favorites = fav ? JSON.parse(fav) : [];
+  }
+
+  search() {
+    this.api.searchBooks(this.query || '').subscribe(list => this.results = list);
+  }
+
+  toggleFavorite(book: Book) {
+    if (this.isFavorite(book.id)) {
+      this.favorites = this.favorites.filter(id => id !== book.id);
+    } else {
+      this.favorites.push(book.id);
+    }
+    this.storage.set('favorites', JSON.stringify(this.favorites));
+  }
+
+  isFavorite(id: number) { return this.favorites.includes(id); }
+
+  readNow(book: Book) {
+    // despacha acción al store (Redux-like)
+    this.store.dispatch({ type: 'ADD_READING', payload: book });
+  }
+}
+```
+
+**src/app/components/book-list/book-list.component.html**
+
+```html
+<div class="search-card">
+  <input type="text" [(ngModel)]="query" placeholder="Buscar título, autor, tag..." />
+  <button (click)="search()">Buscar</button>
+</div>
+
+<div class="results">
+  <div *ngFor="let b of results" class="card">
+    <div class="meta">
+      <h3>{{ b.title }}</h3>
+      <p>{{ b.author }}</p>
+    </div>
+    <div class="actions">
+      <button (click)="toggleFavorite(b)" [title]="isFavorite(b.id) ? 'Quitar favorito' : 'Agregar a favoritos'">
+        <span *ngIf="isFavorite(b.id)">★</span>
+        <span *ngIf="!isFavorite(b.id)">☆</span>
+      </button>
+      <button (click)="readNow(b)">Leer ahora</button>
+    </div>
+  </div>
+</div>
+```
+
+**src/app/components/book-list/book-list.component.css**
+
+```css
+.search-card{ display:flex; gap:8px; margin-bottom:12px }
+.search-card input{ flex:1; padding:8px; border-radius:6px; border:1px solid #e6e6e6 }
+.search-card button{ padding:8px 12px; border-radius:6px; border:none; background:var(--accent) }
+.results .card{ display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:8px; margin-bottom:8px; background: linear-gradient(90deg,#fff,#f7f3ff); box-shadow: 0 1px 3px rgba(0,0,0,0.05) }
+.actions button{ margin-left:8px; border:none; background:transparent; cursor:pointer }
+.actions button:first-child{ font-size:18px }
+```
+
+### Favorites component
+
+**src/app/components/favorites/favorites.component.ts**
+
+```ts
+import { Component, OnInit } from '@angular/core';
+import { StorageService } from '../../services/storage.service';
+import { ApiService } from '../../services/api.service';
+import { Book } from '../../models/book';
+import { StoreService } from '../../services/store.service';
+
+@Component({
+  selector: 'app-favorites',
+  templateUrl: './favorites.component.html',
+  styleUrls: ['./favorites.component.css']
+})
+export class FavoritesComponent implements OnInit {
+  favoritesList: Book[] = [];
+  favIds: number[] = [];
+
+  constructor(private storage: StorageService, private api: ApiService, private store: StoreService) {}
+
+  ngOnInit(): void {
+    const f = this.storage.get('favorites');
+    this.favIds = f ? JSON.parse(f) : [];
+    this.loadFavorites();
+  }
+
+  loadFavorites() {
+    // si no hay favoritos evita llamar API
+    if (!this.favIds.length) { this.favoritesList = []; return; }
+    // Hacemos una búsqueda por cada id (simple) o podríamos pedir toda la lista al backend y filtrar
+    // backend no tiene endpoint por id en el ejemplo, así que llamamos search con cada título por id
+    this.api.searchBooks('').subscribe(all => {
+      this.favoritesList = all.filter(b => this.favIds.includes(b.id));
+    });
+  }
+
+  readNow(book: Book) {
+    this.store.dispatch({ type: 'ADD_READING', payload: book });
+  }
+}
+```
+
+**src/app/components/favorites/favorites.component.html**
+
+```html
+<h2>Favoritos</h2>
+<div *ngIf="favoritesList.length===0">No tienes favoritos aún.</div>
+<ul>
+  <li *ngFor="let b of favoritesList">
+    {{ b.title }} — {{ b.author }}
+    <button (click)="readNow(b)">Leer ahora</button>
+  </li>
+</ul>
+```
+
+**src/app/components/favorites/favorites.component.css**
+
+```css
+h2{ margin-bottom:8px }
+ul{ list-style:none; padding-left:0 }
+li{ background:#fff; padding:8px; border-radius:6px; margin-bottom:6px }
+button{ margin-left:12px }
+```
+
+### Settings component (configurar ngrok url y nombre de usuario)
+
+**src/app/components/settings/settings.component.ts**
+
+```ts
+import { Component } from '@angular/core';
+import { StorageService } from '../../services/storage.service';
+
+@Component({
+  selector: 'app-settings',
+  templateUrl: './settings.component.html',
+  styleUrls: ['./settings.component.css']
+})
+export class SettingsComponent {
+  ngrokUrl = '';
+  username = '';
+
+  constructor(private storage: StorageService) {
+    this.ngrokUrl = this.storage.get('ngrok_url') || '';
+    this.username = this.storage.get('username') || '';
+  }
+
+  save() {
+    this.storage.set('ngrok_url', this.ngrokUrl);
+    this.storage.set('username', this.username);
+    alert('Guardado');
+  }
+}
+```
+
+**src/app/components/settings/settings.component.html**
+
+```html
+<h2>Settings</h2>
+<div class="form-row">
+  <label>Ngrok URL (ej: https://xxxxx.ngrok.io)</label>
+  <input [(ngModel)]="ngrokUrl" placeholder="http://..." />
+</div>
+<div class="form-row">
+  <label>Nombre de usuario</label>
+  <input [(ngModel)]="username" placeholder="Tu nombre" />
+</div>
+<button (click)="save()">Guardar</button>
+```
+
+**src/app/components/settings/settings.component.css**
+
+```css
+.form-row{ margin-bottom:8px }
+label{ display:block; margin-bottom:4px }
+input{ padding:8px; border-radius:6px; border:1px solid #eee }
+button{ background:var(--accent); padding:8px 12px; border-radius:6px; border:none }
+```
+
+---
+
+# Store (acciones / reducer ya incluidas en StoreService)
+
+En este ejemplo usamos un `StoreService` simple (ver `services/store.service.ts`) que actúa como un store Redux-like. El componente `book-list` despacha la acción `ADD_READING` y el `app.component` se suscribe a `store.state$` para mostrar el listado reactivo.
+
+---
+
+# Estilos globales (pastel)
+
+**src/styles.css**
+
+```css
+:root{
+  --bg: #fffaf0;
+  --card: #f7f3ff;
+  --accent: #b9d6d6;
+  --muted: #9aa8a8;
+}
+body{ background:var(--bg); font-family: Arial, sans-serif }
+button{ cursor:pointer }
+```
