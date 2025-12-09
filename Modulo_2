@@ -1,0 +1,1988 @@
+# Proyecto NativeScript con Angular - Código Completo
+
+## src/app/services/task.service.ts
+
+```typescript
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+
+export interface Task {
+  id: number;
+  title: string;
+  description: string;
+  completed: boolean;
+  category?: string;
+  priority?: string;
+  assignee?: string;
+  dueDate?: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class TaskService {
+  private tasks: Task[] = [
+    { 
+      id: 1, 
+      title: 'Diseñar interfaz de usuario', 
+      description: 'Crear mockups para la aplicación móvil con colores pasteles', 
+      completed: false,
+      priority: 'alta',
+      category: 'Diseño',
+      assignee: 'María García',
+      dueDate: '2025-12-15'
+    },
+    { 
+      id: 2, 
+      title: 'Implementar autenticación', 
+      description: 'Configurar sistema de login con Firebase y validaciones', 
+      completed: true,
+      priority: 'alta',
+      category: 'Desarrollo',
+      assignee: 'Juan Pérez',
+      dueDate: '2025-12-10'
+    },
+    { 
+      id: 3, 
+      title: 'Optimizar rendimiento', 
+      description: 'Mejorar tiempos de carga y optimizar imágenes', 
+      completed: false,
+      priority: 'media',
+      category: 'Performance',
+      assignee: 'Ana López',
+      dueDate: '2025-12-20'
+    },
+    { 
+      id: 4, 
+      title: 'Escribir documentación', 
+      description: 'Documentar el código y crear guías de usuario', 
+      completed: false,
+      priority: 'baja',
+      category: 'Documentación',
+      assignee: 'Carlos Ruiz',
+      dueDate: '2025-12-25'
+    },
+    { 
+      id: 5, 
+      title: 'Testing de la aplicación', 
+      description: 'Realizar pruebas unitarias, integración y E2E', 
+      completed: true,
+      priority: 'alta',
+      category: 'Testing',
+      assignee: 'Laura Martínez',
+      dueDate: '2025-12-08'
+    }
+  ];
+
+  private tasksSubject = new BehaviorSubject<Task[]>(this.tasks);
+  public tasks$: Observable<Task[]> = this.tasksSubject.asObservable();
+
+  constructor() {
+    console.log('✅ TaskService initialized globally');
+  }
+
+  getTasks(): Task[] {
+    return [...this.tasks];
+  }
+
+  getTaskById(id: number): Task | undefined {
+    return this.tasks.find(task => task.id === id);
+  }
+
+  searchTasks(query: string): Task[] {
+    if (!query || query.trim() === '') {
+      return [...this.tasks];
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    return this.tasks.filter(task => 
+      task.title.toLowerCase().includes(lowerQuery) ||
+      task.description.toLowerCase().includes(lowerQuery) ||
+      task.category?.toLowerCase().includes(lowerQuery) ||
+      task.assignee?.toLowerCase().includes(lowerQuery)
+    );
+  }
+
+  addTask(task: Task): void {
+    this.tasks.push(task);
+    this.tasksSubject.next([...this.tasks]);
+  }
+
+  // ✅ Requisito 3: Método para agregar tareas aleatorias (pull to refresh)
+  addRandomTask(): Task {
+    const titles = [
+      'Revisar código',
+      'Actualizar dependencias',
+      'Crear nueva feature',
+      'Refactorizar componente',
+      'Solucionar bug crítico',
+      'Implementar analytics',
+      'Diseñar nueva pantalla',
+      'Configurar CI/CD'
+    ];
+    
+    const categories = ['Desarrollo', 'Diseño', 'Testing', 'DevOps', 'Documentación'];
+    const priorities = ['alta', 'media', 'baja'];
+    const assignees = ['María García', 'Juan Pérez', 'Ana López', 'Carlos Ruiz', 'Laura Martínez'];
+    
+    const newId = Math.max(...this.tasks.map(t => t.id)) + 1;
+    const randomTitle = titles[Math.floor(Math.random() * titles.length)];
+    
+    const newTask: Task = {
+      id: newId,
+      title: randomTitle,
+      description: `Descripción de la tarea: ${randomTitle}`,
+      completed: false,
+      category: categories[Math.floor(Math.random() * categories.length)],
+      priority: priorities[Math.floor(Math.random() * priorities.length)],
+      assignee: assignees[Math.floor(Math.random() * assignees.length)],
+      dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    };
+    
+    this.tasks.unshift(newTask);
+    this.tasksSubject.next([...this.tasks]);
+    return newTask;
+  }
+
+  toggleComplete(id: number): void {
+    const task = this.tasks.find(t => t.id === id);
+    if (task) {
+      task.completed = !task.completed;
+      this.tasksSubject.next([...this.tasks]);
+    }
+  }
+
+  // ✅ Requisito 4: Método para cambiar categoría
+  updateCategory(id: number, category: string): void {
+    const task = this.tasks.find(t => t.id === id);
+    if (task) {
+      task.category = category;
+      this.tasksSubject.next([...this.tasks]);
+    }
+  }
+
+  deleteTask(id: number): void {
+    this.tasks = this.tasks.filter(t => t.id !== id);
+    this.tasksSubject.next([...this.tasks]);
+  }
+}
+```
+
+---
+
+## src/app/directives/password-validator.directive.ts
+
+```typescript
+import { Directive, forwardRef } from '@angular/core';
+import { NG_VALIDATORS, Validator, AbstractControl, ValidationErrors } from '@angular/forms';
+
+// ✅ Requisito 7: Validador personalizado con directiva
+@Directive({
+  selector: '[appPasswordValidator]',
+  providers: [{
+    provide: NG_VALIDATORS,
+    useExisting: forwardRef(() => PasswordValidatorDirective),
+    multi: true
+  }]
+})
+export class PasswordValidatorDirective implements Validator {
+  validate(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+    
+    if (!value) {
+      return null;
+    }
+
+    // Validar longitud mínima
+    if (value.length < 8) {
+      return { 
+        passwordValidator: { 
+          message: 'La contraseña debe tener al menos 8 caracteres' 
+        } 
+      };
+    }
+
+    // Validar que contenga al menos una mayúscula
+    if (!/[A-Z]/.test(value)) {
+      return { 
+        passwordValidator: { 
+          message: 'La contraseña debe contener al menos una mayúscula' 
+        } 
+      };
+    }
+
+    // Validar que contenga al menos un número
+    if (!/[0-9]/.test(value)) {
+      return { 
+        passwordValidator: { 
+          message: 'La contraseña debe contener al menos un número' 
+        } 
+      };
+    }
+
+    // Validar que contenga al menos un carácter especial
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
+      return { 
+        passwordValidator: { 
+          message: 'La contraseña debe contener al menos un carácter especial' 
+        } 
+      };
+    }
+
+    return null;
+  }
+}
+```
+
+---
+
+## src/app/features/tasks/tasks.module.ts
+
+```typescript
+import { NgModule, NO_ERRORS_SCHEMA } from '@angular/core';
+import { NativeScriptCommonModule, NativeScriptFormsModule } from '@nativescript/angular';
+import { TasksRoutingModule } from './tasks-routing.module';
+import { TaskListComponent } from './components/task-list/task-list.component';
+import { TaskDetailComponent } from './components/task-detail/task-detail.component';
+import { TaskSearchComponent } from './components/task-search/task-search.component';
+import { PasswordValidatorDirective } from '~/app/directives/password-validator.directive';
+
+@NgModule({
+  declarations: [
+    TaskListComponent,
+    TaskDetailComponent,
+    TaskSearchComponent,
+    PasswordValidatorDirective
+  ],
+  imports: [
+    NativeScriptCommonModule,
+    NativeScriptFormsModule,
+    TasksRoutingModule
+  ],
+  schemas: [NO_ERRORS_SCHEMA]
+})
+export class TasksModule { }
+```
+
+---
+
+## src/app/features/tasks/tasks-routing.module.ts
+
+```typescript
+import { NgModule } from '@angular/core';
+import { Routes } from '@angular/router';
+import { NativeScriptRouterModule } from '@nativescript/angular';
+import { TaskListComponent } from './components/task-list/task-list.component';
+import { TaskDetailComponent } from './components/task-detail/task-detail.component';
+import { TaskSearchComponent } from './components/task-search/task-search.component';
+
+const routes: Routes = [
+  { path: '', component: TaskListComponent },
+  { path: 'detail/:id', component: TaskDetailComponent },
+  { path: 'search', component: TaskSearchComponent }
+];
+
+@NgModule({
+  imports: [NativeScriptRouterModule.forChild(routes)],
+  exports: [NativeScriptRouterModule]
+})
+export class TasksRoutingModule { }
+```
+
+---
+
+## src/app/features/tasks/components/task-list/task-list.component.ts
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { RouterExtensions } from '@nativescript/angular';
+import { TaskService, Task } from '~/app/services/task.service';
+import { isAndroid } from '@nativescript/core';
+import { action } from '@nativescript/core/ui/dialogs';
+import { Toasty, ToastDuration, ToastPosition } from '@triniwiz/nativescript-toasty';
+import { AnimationCurve } from '@nativescript/core';
+import { View } from '@nativescript/core';
+
+@Component({
+  selector: 'ns-task-list',
+  templateUrl: './task-list.component.html',
+  styleUrls: ['./task-list.component.css']
+})
+export class TaskListComponent implements OnInit {
+  tasks: Task[] = [];
+  platformMessage: string = '';
+  platformEmoji: string = '';
+  isRefreshing: boolean = false;
+
+  constructor(
+    private taskService: TaskService,
+    private routerExtensions: RouterExtensions
+  ) {}
+
+  ngOnInit(): void {
+    this.loadTasks();
+    
+    if (isAndroid) {
+      this.platformMessage = 'Estás usando Android';
+      this.platformEmoji = '🤖';
+      console.log('📱 Platform: Android');
+    } else {
+      this.platformMessage = 'Estás usando iOS';
+      this.platformEmoji = '🍎';
+      console.log('📱 Platform: iOS');
+    }
+  }
+
+  loadTasks(): void {
+    this.tasks = this.taskService.getTasks();
+  }
+
+  // ✅ Requisito 2: Navegación con RouterExtensions
+  onTaskTap(task: Task): void {
+    this.routerExtensions.navigate(['/tasks/detail', task.id], {
+      transition: {
+        name: 'slide',
+        duration: 300,
+        curve: 'easeInOut'
+      }
+    });
+  }
+
+  // ✅ Requisito 3: Pull to Refresh
+  onPullToRefresh(args: any): void {
+    const pullRefresh = args.object;
+    
+    setTimeout(() => {
+      // Agregar nueva tarea aleatoria
+      const newTask = this.taskService.addRandomTask();
+      this.loadTasks();
+      
+      // ✅ Requisito 5: Toast de notificación
+      const toast = new Toasty({
+        text: `✅ Nueva tarea agregada: ${newTask.title}`,
+        duration: ToastDuration.SHORT,
+        position: ToastPosition.BOTTOM,
+        textColor: '#FFFFFF',
+        backgroundColor: '#A5D6A7'
+      });
+      toast.show();
+      
+      pullRefresh.refreshing = false;
+      this.isRefreshing = false;
+    }, 1000);
+  }
+
+  onToggleComplete(task: Task, event: any): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.taskService.toggleComplete(task.id);
+    this.loadTasks();
+    
+    // ✅ Requisito 5: Toast
+    const message = task.completed ? '✓ Tarea marcada como pendiente' : '✅ Tarea completada';
+    const toast = new Toasty({
+      text: message,
+      duration: ToastDuration.SHORT,
+      position: ToastPosition.BOTTOM
+    });
+    toast.show();
+  }
+
+  // ✅ Requisito 4: Diálogo de acción para cambiar categoría
+  async onChangeCategory(task: Task, event: any): Promise<void> {
+    if (event) {
+      event.stopPropagation();
+    }
+
+    const options = {
+      title: "Cambiar Categoría",
+      message: `Selecciona una categoría para: ${task.title}`,
+      cancelButtonText: "Cancelar",
+      actions: ["Desarrollo", "Diseño", "Testing", "DevOps", "Documentación", "Performance"]
+    };
+
+    const result = await action(options);
+    
+    if (result !== "Cancelar") {
+      this.taskService.updateCategory(task.id, result);
+      this.loadTasks();
+      
+      // ✅ Requisito 5: Toast de confirmación
+      const toast = new Toasty({
+        text: `✓ Categoría cambiada a: ${result}`,
+        duration: ToastDuration.SHORT,
+        position: ToastPosition.BOTTOM,
+        backgroundColor: '#BBDEFB'
+      });
+      toast.show();
+    }
+  }
+
+  // ✅ Requisito 8: Detección de gestos (Long Press)
+  onLongPress(args: any, task: Task): void {
+    const view = args.object as View;
+    
+    // ✅ Requisito 9: Animación
+    view.animate({
+      rotate: 360,
+      duration: 500,
+      curve: AnimationCurve.easeInOut
+    }).then(() => {
+      view.rotate = 0;
+    });
+
+    const toast = new Toasty({
+      text: `🔄 Mantuviste presionado: ${task.title}`,
+      duration: ToastDuration.LONG,
+      position: ToastPosition.CENTER
+    });
+    toast.show();
+  }
+
+  // ✅ Requisito 8: Detección de gestos (Double Tap)
+  onDoubleTap(args: any, task: Task): void {
+    const toast = new Toasty({
+      text: `👆👆 Doble tap en: ${task.title}`,
+      duration: ToastDuration.SHORT,
+      position: ToastPosition.TOP
+    });
+    toast.show();
+  }
+
+  onSearch(): void {
+    this.routerExtensions.navigate(['/tasks/search']);
+  }
+
+  getPriorityColor(priority?: string): string {
+    switch(priority) {
+      case 'alta': return '#FFB3BA';
+      case 'media': return '#FFE4B5';
+      case 'baja': return '#B3E5FC';
+      default: return '#E0E0E0';
+    }
+  }
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-list/task-list.component.html
+
+```xml
+<ActionBar title="Mis Tareas" class="action-bar">
+    <ActionItem (tap)="onSearch()" ios.position="right" android.position="actionBar">
+        <Label text="🔍" class="action-icon"></Label>
+    </ActionItem>
+</ActionBar>
+
+<PullToRefresh (refresh)="onPullToRefresh($event)">
+    <ScrollView class="page">
+        <StackLayout>
+            <!-- Banner de plataforma -->
+            <GridLayout columns="auto, *" class="platform-banner">
+                <Label col="0" [text]="platformEmoji" class="platform-emoji"></Label>
+                <Label col="1" [text]="platformMessage" class="platform-label"></Label>
+            </GridLayout>
+            
+            <!-- Encabezado -->
+            <StackLayout class="header-section">
+                <Label text="📋 Lista de Tareas" class="main-title"></Label>
+                <Label [text]="'Total: ' + tasks.length + ' tareas'" class="subtitle"></Label>
+                <Label text="👆 Toca una tarea | 👇 Arrastra para actualizar" class="hint-text"></Label>
+            </StackLayout>
+            
+            <!-- ✅ Requisito 3: Pull to Refresh ListView -->
+            <ListView [items]="tasks" class="tasks-list" separatorColor="transparent">
+                <ng-template let-task="item">
+                    <StackLayout class="task-card" 
+                                 (tap)="onTaskTap(task)"
+                                 (longPress)="onLongPress($event, task)"
+                                 (doubleTap)="onDoubleTap($event, task)">
+                        <GridLayout columns="auto, *, auto" rows="auto, auto, auto" class="task-content">
+                            <!-- Estado -->
+                            <Label col="0" row="0" rowSpan="3"
+                                   [text]="task.completed ? '✅' : '⭕'" 
+                                   class="task-status"></Label>
+                            
+                            <!-- Info principal -->
+                            <StackLayout col="1" row="0" class="task-info">
+                                <Label [text]="task.title" 
+                                       [class.completed-text]="task.completed"
+                                       class="task-title" textWrap="true"></Label>
+                                <Label [text]="task.description" 
+                                       class="task-description" 
+                                       textWrap="true"></Label>
+                            </StackLayout>
+                            
+                            <!-- Categoría y assignee -->
+                            <StackLayout col="1" row="1" orientation="horizontal" class="task-meta">
+                                <Label [text]="'📁 ' + task.category" class="meta-label"></Label>
+                                <Label [text]="'👤 ' + task.assignee" class="meta-label"></Label>
+                            </StackLayout>
+                            
+                            <!-- Prioridad -->
+                            <Label col="1" row="2"
+                                   [text]="'⚡ ' + (task.priority || 'media')"
+                                   [backgroundColor]="getPriorityColor(task.priority)"
+                                   class="priority-badge"></Label>
+                            
+                            <!-- Botones de acción -->
+                            <StackLayout col="2" row="0" rowSpan="3" class="action-buttons">
+                                <!-- ✅ Requisito 4: Botón para cambiar categoría -->
+                                <Button text="📂"
+                                        (tap)="onChangeCategory(task, $event)"
+                                        class="btn-category"></Button>
+                                
+                                <!-- Botón completar -->
+                                <Button [text]="task.completed ? '↩️' : '✓'"
+                                        (tap)="onToggleComplete(task, $event)"
+                                        [class]="task.completed ? 'btn-undo' : 'btn-complete'"></Button>
+                            </StackLayout>
+                        </GridLayout>
+                    </StackLayout>
+                </ng-template>
+            </ListView>
+            
+            <!-- Mensaje vacío -->
+            <StackLayout *ngIf="tasks.length === 0" class="empty-state">
+                <Label text="📭" class="empty-icon"></Label>
+                <Label text="No hay tareas" class="empty-text"></Label>
+            </StackLayout>
+        </StackLayout>
+    </ScrollView>
+</PullToRefresh>
+```
+
+---
+
+## src/app/features/tasks/components/task-list/task-list.component.css
+
+```css
+/* Estilos con colores pasteles */
+
+.page {
+    background-color: #FAF3F0;
+}
+
+.action-icon {
+    font-size: 24;
+    padding: 5;
+}
+
+.platform-banner {
+    background-color: #E8D5FF;
+    padding: 15 20;
+    margin: 0 0 10 0;
+}
+
+.platform-emoji {
+    font-size: 28;
+    margin-right: 10;
+}
+
+.platform-label {
+    font-size: 16;
+    font-weight: bold;
+    color: #6B4C9A;
+    vertical-align: center;
+}
+
+.header-section {
+    padding: 20;
+    background-color: #FFF9E6;
+    margin: 10 15;
+    border-radius: 15;
+}
+
+.main-title {
+    font-size: 28;
+    font-weight: bold;
+    color: #5D4E6D;
+    text-align: center;
+    margin-bottom: 5;
+}
+
+.subtitle {
+    font-size: 14;
+    color: #8B7E8F;
+    text-align: center;
+}
+
+.hint-text {
+    font-size: 12;
+    color: #B8B0BF;
+    text-align: center;
+    margin-top: 8;
+    font-style: italic;
+}
+
+.tasks-list {
+    background-color: transparent;
+    separator-color: transparent;
+}
+
+.task-card {
+    background-color: #FFFFFF;
+    margin: 8 15 8 15;
+    padding: 15;
+    border-radius: 12;
+    border-width: 2;
+    border-color: #E8DFF5;
+}
+
+.task-content {
+    padding: 5;
+}
+
+.task-status {
+    font-size: 32;
+    margin-right: 12;
+    vertical-align: top;
+}
+
+.task-info {
+    margin-right: 10;
+}
+
+.task-title {
+    font-size: 18;
+    font-weight: bold;
+    color: #5D4E6D;
+    margin-bottom: 5;
+}
+
+.task-description {
+    font-size: 14;
+    color: #8B7E8F;
+    margin-bottom: 8;
+}
+
+.completed-text {
+    text-decoration: line-through;
+    color: #B8B0BF;
+}
+
+.task-meta {
+    margin-bottom: 8;
+}
+
+.meta-label {
+    font-size: 12;
+    color: #8B7E8F;
+    margin-right: 15;
+    background-color: #F5F5F5;
+    padding: 4 8;
+    border-radius: 8;
+}
+
+.priority-badge {
+    font-size: 11;
+    padding: 4 10;
+    border-radius: 12;
+    color: #5D4E6D;
+    font-weight: bold;
+    text-align: center;
+    width: 120;
+}
+
+.action-buttons {
+    justify-content: center;
+}
+
+.btn-category {
+    font-size: 20;
+    padding: 8;
+    background-color: #FFE4B5;
+    color: #D97706;
+    border-radius: 25;
+    border-width: 0;
+    width: 50;
+    height: 50;
+    margin-bottom: 8;
+}
+
+.btn-complete {
+    font-size: 20;
+    padding: 8;
+    background-color: #C9F4C9;
+    color: #2E7D32;
+    border-radius: 25;
+    border-width: 0;
+    width: 50;
+    height: 50;
+}
+
+.btn-undo {
+    font-size: 20;
+    padding: 8;
+    background-color: #FFE5B4;
+    color: #D97706;
+    border-radius: 25;
+    border-width: 0;
+    width: 50;
+    height: 50;
+}
+
+.empty-state {
+    padding: 60 20;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 64;
+    margin-bottom: 15;
+    text-align: center;
+}
+
+.empty-text {
+    font-size: 18;
+    color: #B8B0BF;
+    text-align: center;
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-list/task-list.component.android.css
+
+```css
+.page {
+    background-color: #E8F5E9;
+}
+
+.platform-banner {
+    background-color: #B2DFDB;
+    elevation: 3;
+}
+
+.header-section {
+    background-color: #C8E6C9;
+    elevation: 2;
+}
+
+.task-card {
+    elevation: 4;
+    border-color: #A5D6A7;
+}
+
+.btn-category {
+    elevation: 2;
+}
+
+.btn-complete {
+    background-color: #A5D6A7;
+    elevation: 2;
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-list/task-list.component.ios.css
+
+```css
+.page {
+    background-color: #E3F2FD;
+}
+
+.platform-banner {
+    background-color: #BBDEFB;
+}
+
+.header-section {
+    background-color: #E1F5FE;
+}
+
+.task-card {
+    border-radius: 15;
+    border-color: #90CAF9;
+}
+
+.btn-category {
+    border-radius: 25;
+}
+
+.btn-complete {
+    background-color: #B2DFDB;
+    border-radius: 25;
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-search/task-search.component.ts
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { RouterExtensions } from '@nativescript/angular';
+import { TaskService, Task } from '~/app/services/task.service';
+
+@Component({
+  selector: 'ns-task-search',
+  templateUrl: './task-search.component.html',
+  styleUrls: ['./task-search.component.css']
+})
+export class TaskSearchComponent implements OnInit {
+  // ✅ Requisito 6: Two-way binding
+  searchQuery: string = '';
+  searchResults: Task[] = [];
+  password: string = '';
+  showPassword: boolean = false;
+
+  constructor(
+    private taskService: TaskService,
+    private routerExtensions: RouterExtensions
+  ) {}
+
+  ngOnInit(): void {
+    this.searchResults = this.taskService.getTasks();
+  }
+
+  // Búsqueda en tiempo real con two-way binding
+  onSearchChange(): void {
+    this.searchResults = this.taskService.searchTasks(this.searchQuery);
+  }
+
+  onTaskTap(task: Task): void {
+    this.routerExtensions.navigate(['/tasks/detail', task.id]);
+  }
+
+  onBack(): void {
+    this.routerExtensions.back();
+  }
+
+  togglePasswordVisibility(): void {
+    this.showPassword = !this.showPassword;
+  }
+
+  getCategoryIcon(category?: string): string {
+    switch(category) {
+      case 'Desarrollo': return '💻';
+      case 'Diseño': return '🎨';
+      case 'Testing': return '🧪';
+      case 'DevOps': return '⚙️';
+      case 'Documentación': return '📚';
+      case 'Performance': return '⚡';
+      default: return '📁';
+    }
+  }
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-search/task-search.component.html
+
+```xml
+<ActionBar title="Buscar Tareas" class="action-bar">
+    <NavigationButton text="Volver" android.systemIcon="ic_menu_back" (tap)="onBack()"></NavigationButton>
+</ActionBar>
+
+<ScrollView class="page">
+    <StackLayout>
+        <!-- Sección de búsqueda -->
+        <StackLayout class="search-section">
+            <Label text="🔍 Buscar" class="section-title"></Label>
+            
+            <!-- ✅ Requisito 6: Two-way binding [(ngModel)] -->
+            <TextField 
+                [(ngModel)]="searchQuery"
+                (textChange)="onSearchChange()"
+                hint="Escribe para buscar..."
+                class="search-input"></TextField>
+            
+            <Label [text]="'Resultados: ' + searchResults.length" class="results-count"></Label>
+        </StackLayout>
+
+        <!-- Sección de validación de contraseña -->
+        <StackLayout class="password-section">
+            <Label text="🔒 Validar Contraseña Segura" class="section-title"></Label>
+            
+            <!-- ✅ Requisito 6 y 7: Two-way binding con validador personalizado -->
+            <GridLayout columns="*, auto" class="password-container">
+                <TextField col="0"
+                    [(ngModel)]="password"
+                    [secure]="!showPassword"
+                    hint="Ingresa una contraseña segura"
+                    appPasswordValidator
+                    #passwordField="ngModel"
+                    class="password-input"></TextField>
+                
+                <Button col="1" 
+                    [text]="showPassword ? '🙈' : '👁️'"
+                    (tap)="togglePasswordVisibility()"
+                    class="btn-toggle-password"></Button>
+            </GridLayout>
+            
+            <!-- Mostrar errores del validador -->
+            <Label *ngIf="passwordField.invalid && passwordField.dirty"
+                   [text]="passwordField.errors?.['passwordValidator']?.message"
+                   class="error-message"></Label>
+            
+            <Label *ngIf="passwordField.valid && password"
+                   text="✅ Contraseña segura"
+                   class="success-message"></Label>
+        </StackLayout>
+
+        <!-- ✅ Requisito 1: ListView con FlexboxLayout -->
+        <ListView [items]="searchResults" class="results-list" separatorColor="transparent">
+            <ng-template let-task="item">
+                <StackLayout class="result-card" (tap)="onTaskTap(task)">
+                    <!-- FlexboxLayout anidado -->
+                    <FlexboxLayout class="task-flex-container" 
+                                   flexDirection="row" 
+                                   justifyContent="space-between"
+                                   alignItems="center"
+                                   flexWrap="wrap">
+                        
+                        <!-- Icono de categoría -->
+                        <Label [text]="getCategoryIcon(task.category)" 
+                               class="category-icon"
+                               flexGrow="0"
+                               flexShrink="0"></Label>
+                        
+                        <!-- Contenido principal -->
+                        <FlexboxLayout class="task-content-flex"
+                                       flexDirection="column"
+                                       flexGrow="1"
+                                       flexShrink="1">
+                            <Label [text]="task.title" 
+                                   class="result-title"
+                                   textWrap="true"></Label>
+                            
+                            <FlexboxLayout flexDirection="row" 
+                                          flexWrap="wrap"
+                                          class="task-tags">
+                                <Label [text]="'📁 ' + task.category" 
+                                       class="tag-label"></Label>
+                                <Label [text]="'👤 ' + task.assignee" 
+                                       class="tag-label"></Label>
+                                <Label [text]="'📅 ' + task.dueDate" 
+                                       class="tag-label"></Label>
+                            </FlexboxLayout>
+                        </FlexboxLayout>
+                        
+                        <!-- Estado -->
+                        <Label [text]="task.completed ? '✅' : '⏳'" 
+                               class="status-icon"
+                               flexGrow="0"
+                               flexShrink="0"></Label>
+                    </FlexboxLayout>
+                </StackLayout>
+            </ng-template>
+        </ListView>
+
+        <!-- Mensaje vacío -->
+        <StackLayout *ngIf="searchResults.length === 0" class="empty-results">
+            <Label text="🔍" class="empty-icon"></Label>
+            <Label text="No se encontraron resultados" class="empty-text"></Label>
+            <Label text="Intenta con otros términos" class="empty-hint"></Label>
+        </StackLayout>
+    </StackLayout>
+</ScrollView>
+```
+
+---
+
+## src/app/features/tasks/components/task-search/task-search.component.css
+
+```css
+/* Estilos con colores pasteles */
+
+.page {
+    background-color: #FAF3F0;
+}
+
+.search-section {
+    padding: 20;
+    background-color: #E8D5FF;
+    margin: 15;
+    border-radius: 15;
+}
+
+.password-section {
+    padding: 20;
+    background-color: #FFE4B5;
+    margin: 15;
+    border-radius: 15;
+}
+
+.section-title {
+    font-size: 20;
+    font-weight: bold;
+    color: #5D4E6D;
+    margin-bottom: 15;
+}
+
+.search-input {
+    font-size: 16;
+    padding: 12;
+    background-color: #FFFFFF;
+    border-radius: 10;
+    border-width: 2;
+    border-color: #D4A5FF;
+    margin-bottom: 10;
+}
+
+.results-count {
+    font-size: 14;
+    color: #6B4C9A;
+    text-align: center;
+}
+
+.password-container {
+    margin-bottom: 10;
+}
+
+.password-input {
+    font-size: 16;
+    padding: 12;
+    background-color: #FFFFFF;
+    border-radius: 10;
+    border-width: 2;
+    border-color: #FFD8A8;
+    margin-right: 10;
+}
+
+.btn-toggle-password {
+    font-size: 20;
+    width: 50;
+    height: 50;
+    background-color: #FFFFFF;
+    border-radius: 25;
+    border-width: 2;
+    border-color: #FFD8A8;
+}
+
+.error-message {
+    font-size: 12;
+    color: #D32F2F;
+    background-color: #FFCDD2;
+    padding: 8;
+    border-radius: 8;
+    margin-top: 5;
+}
+
+.success-message {
+    font-size: 12;
+    color: #2E7D32;
+    background-color: #C8E6C9;
+    padding: 8;
+    border-radius: 8;
+    margin-top: 5;
+    text-align: center;
+}
+
+.results-list {
+    background-color: transparent;
+}
+
+.result-card {
+    background-color: #FFFFFF;
+    margin: 8 15;
+    padding: 15;
+    border-radius: 12;
+    border-width: 2;
+    border-color: #E8DFF5;
+}
+
+.task-flex-container {
+    padding: 5;
+}
+
+.category-icon {
+    font-size: 40;
+    margin-right: 15;
+    width: 50;
+    text-align: center;
+}
+
+.task-content-flex {
+    margin-right: 15;
+}
+
+.result-title {
+    font-size: 18;
+    font-weight: bold;
+    color: #5D4E6D;
+    margin-bottom: 8;
+}
+
+.task-tags {
+    margin-top: 5;
+}
+
+.tag-label {
+    font-size: 11;
+    color: #8B7E8F;
+    background-color: #F5F5F5;
+    padding: 4 8;
+    border-radius: 8;
+    margin-right: 8;
+    margin-bottom: 5;
+}
+
+.status-icon {
+    font-size: 32;
+}
+
+.empty-results {
+    padding: 60 20;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 64;
+    text-align: center;
+    margin-bottom: 15;
+}
+
+.empty-text {
+    font-size: 18;
+    color: #B8B0BF;
+    text-align: center;
+    margin-bottom: 10;
+}
+
+.empty-hint {
+    font-size: 14;
+    color: #D4C5DB;
+    text-align: center;
+    font-style: italic;
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-detail/task-detail.component.ts
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { RouterExtensions } from '@nativescript/angular';
+import { TaskService, Task } from '~/app/services/task.service';
+import { isAndroid } from '@nativescript/core';
+import { Toasty, ToastDuration, ToastPosition } from '@triniwiz/nativescript-toasty';
+import { AnimationCurve } from '@nativescript/core';
+import { View } from '@nativescript/core';
+
+@Component({
+  selector: 'ns-task-detail',
+  templateUrl: './task-detail.component.html',
+  styleUrls: ['./task-detail.component.css']
+})
+export class TaskDetailComponent implements OnInit {
+  task: Task | undefined;
+  platformInfo: string = '';
+  isAnimating: boolean = false;
+
+  constructor(
+    private route: ActivatedRoute,
+    private routerExtensions: RouterExtensions,
+    private taskService: TaskService
+  ) {}
+
+  ngOnInit(): void {
+    const id = +this.route.snapshot.params['id'];
+    this.task = this.taskService.getTaskById(id);
+    
+    this.platformInfo = isAndroid ? '🤖 Android' : '🍎 iOS';
+  }
+
+  onBack(): void {
+    this.routerExtensions.back();
+  }
+
+  onToggleComplete(): void {
+    if (this.task) {
+      this.taskService.toggleComplete(this.task.id);
+      this.task = this.taskService.getTaskById(this.task.id);
+      
+      const toast = new Toasty({
+        text: this.task?.completed ? '✅ Tarea completada' : '↩️ Tarea pendiente',
+        duration: ToastDuration.SHORT,
+        position: ToastPosition.BOTTOM
+      });
+      toast.show();
+    }
+  }
+
+  // ✅ Requisito 8 y 9: Gestos con animación
+  onDoubleTapStatus(args: any): void {
+    const view = args.object as View;
+    
+    if (!this.isAnimating) {
+      this.isAnimating = true;
+      
+      // Animación de escala y rotación
+      view.animate({
+        scale: { x: 1.5, y: 1.5 },
+        rotate: 360,
+        duration: 600,
+        curve: AnimationCurve.spring
+      }).then(() => {
+        return view.animate({
+          scale: { x: 1, y: 1 },
+          rotate: 0,
+          duration: 300
+        });
+      }).then(() => {
+        this.isAnimating = false;
+      });
+
+      const toast = new Toasty({
+        text: '🎨 ¡Animación activada!',
+        duration: ToastDuration.SHORT,
+        position: ToastPosition.CENTER
+      });
+      toast.show();
+    }
+  }
+
+  onLongPressTitle(args: any): void {
+    const view = args.object as View;
+    
+    // Animación de color (cambio de opacidad)
+    view.animate({
+      opacity: 0.3,
+      duration: 200
+    }).then(() => {
+      return view.animate({
+        opacity: 1,
+        duration: 200
+      });
+    });
+
+    const toast = new Toasty({
+      text: '🔔 Long press detectado',
+      duration: ToastDuration.SHORT,
+      position: ToastPosition.TOP
+    });
+    toast.show();
+  }
+
+  getPriorityLabel(priority?: string): string {
+    switch(priority) {
+      case 'alta': return '🔴 Alta';
+      case 'media': return '🟡 Media';
+      case 'baja': return '🟢 Baja';
+      default: return '⚪ Sin prioridad';
+    }
+  }
+
+  getPriorityColor(priority?: string): string {
+    switch(priority) {
+      case 'alta': return '#FFB3BA';
+      case 'media': return '#FFE4B5';
+      case 'baja': return '#B3E5FC';
+      default: return '#E0E0E0';
+    }
+  }
+}
+```
+
+---
+
+## src/app/features/tasks/components/task-detail/task-detail.component.html
+
+```xml
+<ActionBar title="Detalle de Tarea" class="action-bar">
+    <NavigationButton text="Volver" android.systemIcon="ic_menu_back" (tap)="onBack()"></NavigationButton>
+</ActionBar>
+
+<ScrollView class="page">
+    <StackLayout *ngIf="task">
+        <!-- Información de plataforma -->
+        <Label [text]="platformInfo" class="platform-info"></Label>
+        
+        <!-- ✅ Requisito 8: Título con detección de Long Press -->
+        <StackLayout class="title-section" (longPress)="onLongPressTitle($event)">
+            <!-- ✅ Requisito 8 y 9: Status con Double Tap y animación -->
+            <Label [text]="task.completed ? '✅' : '⭕'" 
+                   class="status-icon"
+                   (doubleTap)="onDoubleTapStatus($event)"></Label>
+            <Label [text]="task.title" 
+                   class="detail-title" 
+                   [class.completed-title]="task.completed"
+                   textWrap="true"></Label>
+            <Label text="👆👆 Doble tap en el ícono | 👇 Long press aquí" 
+                   class="gesture-hint"></Label>
+        </StackLayout>
+        
+        <!-- Descripción -->
+        <StackLayout class="section">
+            <Label text="📝 Descripción" class="section-header"></Label>
+            <Label [text]="task.description" 
+                   class="detail-description" 
+                   textWrap="true"></Label>
+        </StackLayout>
+        
+        <!-- FlexboxLayout para información -->
+        <FlexboxLayout class="section info-flex" 
+                       flexDirection="row" 
+                       flexWrap="wrap"
+                       justifyContent="space-around">
+            <StackLayout class="info-card" flexBasis="45%">
+                <Label text="📊 Estado" class="info-label"></Label>
+                <Label [text]="task.completed ? '✓ Completada' : '⏳ Pendiente'" 
+                       [class]="task.completed ? 'status-completed' : 'status-pending'"
+                       class="info-value"></Label>
+            </StackLayout>
+            
+            <StackLayout class="info-card" flexBasis="45%">
+                <Label text="🎯 Prioridad" class="info-label"></Label>
+                <Label [text]="getPriorityLabel(task.priority)"
+                       [backgroundColor]="getPriorityColor(task.priority)"
+                       class="info-value priority-value"></Label>
+            </StackLayout>
+        </FlexboxLayout>
+        
+        <!-- Más información -->
+        <StackLayout class="section">
+            <Label text="📁 Categoría" class="section-header"></Label>
+            <Label [text]="task.category" class="detail-text"></Label>
+        </StackLayout>
+        
+        <StackLayout class="section">
+            <Label text="👤 Asignado a" class="section-header"></Label>
+            <Label [text]="task.assignee" class="detail-text"></Label>
+        </StackLayout>
+        
+        <StackLayout class="section">
+            <Label text="📅 Fecha de vencimiento" class="section-header"></Label>
+            <Label [text]="task.dueDate" class="detail-text"></Label>
+        </StackLayout>
+        
+        <StackLayout class="section">
+            <Label text="🔢 Identificador" class="section-header"></Label>
+            <Label [text]="'#' + task.id" class="task-id"></Label>
+        </StackLayout>
+        
+        <!-- Botón de acción -->
+        <Button [text]="task.completed ? '↩️ Marcar como pendiente' : '✅ Marcar como completada'"
+                (tap)="onToggleComplete()"
+                [class]="task.completed ? 'btn-action-undo' : 'btn-action-complete'"></Button>
+    </StackLayout>
+    
+    <!-- Error -->
+    <StackLayout *ngIf="!task" class="error-state">
+        <Label text="❌" class="error-icon"></Label>
+        <Label text="Tarea no encontrada" class="error-text"></Label>
+        <Button text="← Volver" (tap)="onBack()" class="btn-back"></Button>
+    </StackLayout>
+</ScrollView>
+```
+
+---
+
+## src/app/features/tasks/components/task-detail/task-detail.component.css
+
+```css
+.page {
+    background-color: #FAF3F0;
+    padding: 20;
+}
+
+.platform-info {
+    font-size: 14;
+    color: #8B7E8F;
+    text-align: center;
+    margin-bottom: 15;
+    padding: 8;
+    background-color: #F3E5F5;
+    border-radius: 8;
+}
+
+.title-section {
+    background-color: #E8D5FF;
+    padding: 20;
+    border-radius: 15;
+    margin-bottom: 20;
+    text-align: center;
+}
+
+.status-icon {
+    font-size: 48;
+    text-align: center;
+    margin-bottom: 10;
+}
+
+.detail-title {
+    font-size: 26;
+    font-weight: bold;
+    color: #5D4E6D;
+    text-align: center;
+    margin-bottom: 10;
+}
+
+.completed-title {
+    text-decoration: line-through;
+    color: #B8B0BF;
+}
+
+.gesture-hint {
+    font-size: 11;
+    color: #8B7E8F;
+    text-align: center;
+    font-style: italic;
+    margin-top: 5;
+}
+
+.section {
+    background-color: #FFFFFF;
+    padding: 15;
+    margin-bottom: 15;
+    border-radius: 12;
+    border-width: 2;
+    border-color: #E8DFF5;
+}
+
+.section-header {
+    font-size: 16;
+    font-weight: bold;
+    color: #6B4C9A;
+    margin-bottom: 10;
+}
+
+.detail-description {
+    font-size: 16;
+    color: #5D4E6D;
+    line-height: 24;
+}
+
+.detail-text {
+    font-size: 16;
+    color: #5D4E6D;
+}
+
+.info-flex {
+    background-color: transparent;
+    padding: 0;
+    margin-bottom: 15;
+}
+
+.info-card {
+    background-color: #FFFFFF;
+    padding: 15;
+    border-radius: 12;
+    border-width: 2;
+    border-color: #E8DFF5;
+    text-align: center;
+}
+
+.info-label {
+    font-size: 14;
+    color: #8B7E8F;
+    margin-bottom: 8;
+}
+
+.info-value {
+    font-size: 16;
+    font-weight: bold;
+}
+
+.status-completed {
+    color: #2E7D32;
+}
+
+.status-pending {
+    color: #D97706;
+}
+
+.priority-value {
+    padding: 8;
+    border-radius: 8;
+    color: #5D4E6D;
+}
+
+.task-id {
+    font-size: 18;
+    font-weight: bold;
+    color: #8B7E8F;
+    text-align: center;
+    padding: 10;
+    background-color: #F5F5F5;
+    border-radius: 8;
+}
+
+.btn-action-complete {
+    font-size: 18;
+    font-weight: bold;
+    background-color: #C9F4C9;
+    color: #2E7D32;
+    padding: 15;
+    margin-top: 20;
+    border-radius: 12;
+    border-width: 0;
+}
+
+.btn-action-undo {
+    font-size: 18;
+    font-weight: bold;
+    background-color: #FFCCBC;
+    color: #D84315;
+    padding: 15;
+    margin-top: 20;
+    border-radius: 12;
+    border-width: 0;
+}
+
+.error-state {
+    padding: 60 20;
+    text-align: center;
+}
+
+.error-icon {
+    font-size: 64;
+    text-align: center;
+    margin-bottom: 20;
+}
+
+.error-text {
+    font-size: 20;
+    color: #B8B0BF;
+    text-align: center;
+    margin-bottom: 30;
+}
+
+.btn-back {
+    font-size: 16;
+    background-color: #B2DFDB;
+    color: #00695C;
+    padding: 12;
+    border-radius: 10;
+}
+```
+
+---
+
+## src/app/app-routing.module.ts
+
+```typescript
+import { NgModule } from '@angular/core';
+import { Routes } from '@angular/router';
+import { NativeScriptRouterModule } from '@nativescript/angular';
+
+const routes: Routes = [
+  { path: '', redirectTo: '/home', pathMatch: 'full' },
+  { 
+    path: 'home', 
+    loadChildren: () => import('~/app/features/home/home.module').then(m => m.HomeModule) 
+  },
+  { 
+    path: 'browse', 
+    loadChildren: () => import('~/app/features/browse/browse.module').then(m => m.BrowseModule) 
+  },
+  { 
+    path: 'search', 
+    loadChildren: () => import('~/app/features/search/search.module').then(m => m.SearchModule) 
+  },
+  { 
+    path: 'featured', 
+    loadChildren: () => import('~/app/features/featured/featured.module').then(m => m.FeaturedModule) 
+  },
+  { 
+    path: 'settings', 
+    loadChildren: () => import('~/app/features/settings/settings.module').then(m => m.SettingsModule) 
+  },
+  { 
+    path: 'tasks', 
+    loadChildren: () => import('~/app/features/tasks/tasks.module').then(m => m.TasksModule) 
+  }
+];
+
+@NgModule({
+  imports: [NativeScriptRouterModule.forRoot(routes)],
+  exports: [NativeScriptRouterModule]
+})
+export class AppRoutingModule { }
+```
+
+---
+
+## src/app/app.component.ts
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
+import { RouterExtensions } from '@nativescript/angular';
+import { filter } from 'rxjs/operators';
+
+@Component({
+  selector: 'ns-app',
+  templateUrl: './app.component.html'
+})
+export class AppComponent implements OnInit {
+  selectedPage: string = '';
+
+  constructor(
+    private router: Router,
+    private routerExtensions: RouterExtensions
+  ) {}
+
+  ngOnInit(): void {
+    this.router.events
+      .pipe(filter((event: any) => event instanceof NavigationEnd))
+      .subscribe((event: NavigationEnd) => {
+        this.selectedPage = event.urlAfterRedirects;
+      });
+  }
+
+  onNavigationItemTap(navItemRoute: string): void {
+    this.routerExtensions.navigate([navItemRoute], {
+      transition: {
+        name: 'fade'
+      }
+    });
+  }
+
+  isPageSelected(pageRoute: string): boolean {
+    return this.selectedPage === pageRoute;
+  }
+}
+```
+
+---
+
+## src/app/app.component.html
+
+```xml
+<RadSideDrawer>
+    <GridLayout tkDrawerContent rows="auto, *" class="sidedrawer sidedrawer-left">
+        <StackLayout row="0" class="sidedrawer-header">
+            <Label text="📱 Mi Aplicación" class="sidedrawer-header-brand"></Label>
+            <Label text="NativeScript + Angular" class="sidedrawer-header-subtitle"></Label>
+        </StackLayout>
+
+        <ScrollView row="1">
+            <StackLayout class="sidedrawer-content">
+                <GridLayout
+                    [class.selected]="isPageSelected('/home')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/home')">
+                    <Label col="0" text="🏠" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Home" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+
+                <GridLayout
+                    [class.selected]="isPageSelected('/browse')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/browse')">
+                    <Label col="0" text="🔍" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Browse" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+
+                <GridLayout
+                    [class.selected]="isPageSelected('/search')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/search')">
+                    <Label col="0" text="🔎" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Search" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+
+                <GridLayout
+                    [class.selected]="isPageSelected('/tasks')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/tasks')">
+                    <Label col="0" text="✓" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Tareas" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+
+                <GridLayout
+                    [class.selected]="isPageSelected('/featured')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/featured')">
+                    <Label col="0" text="⭐" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Featured" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+
+                <GridLayout
+                    [class.selected]="isPageSelected('/settings')"
+                    class="sidedrawer-list-item"
+                    columns="auto, *"
+                    (tap)="onNavigationItemTap('/settings')">
+                    <Label col="0" text="⚙️" class="sidedrawer-list-item-icon"></Label>
+                    <Label col="1" text="Settings" class="sidedrawer-list-item-text"></Label>
+                </GridLayout>
+            </StackLayout>
+        </ScrollView>
+    </GridLayout>
+
+    <page-router-outlet tkMainContent></page-router-outlet>
+</RadSideDrawer>
+```
+
+---
+
+## src/app/app.component.css
+
+```css
+@import '~@nativescript/theme/css/core.css';
+@import '~@nativescript/theme/css/default.css';
+
+.sidedrawer-header {
+    background-color: #D4A5FF;
+    padding: 30 20;
+}
+
+.sidedrawer-header-brand {
+    font-size: 24;
+    font-weight: bold;
+    color: #FFFFFF;
+    text-align: center;
+}
+
+.sidedrawer-header-subtitle {
+    font-size: 12;
+    color: #F5F5F5;
+    text-align: center;
+    margin-top: 5;
+}
+
+.sidedrawer-content {
+    background-color: #FAF3F0;
+    padding-top: 10;
+}
+
+.sidedrawer-list-item {
+    padding: 16 20;
+    margin: 4 8;
+    border-radius: 10;
+}
+
+.sidedrawer-list-item.selected {
+    background-color: #E8D5FF;
+}
+
+.sidedrawer-list-item-icon {
+    font-size: 22;
+    margin-right: 15;
+    color: #6B4C9A;
+    vertical-align: center;
+}
+
+.sidedrawer-list-item-text {
+    font-size: 16;
+    color: #5D4E6D;
+    vertical-align: center;
+    font-weight: 500;
+}
+
+.sidedrawer-list-item.selected .sidedrawer-list-item-text {
+    color: #6B4C9A;
+    font-weight: bold;
+}
+
+.action-bar {
+    background-color: #D4A5FF;
+    color: #FFFFFF;
+}
+```
+
+---
+
+## package.json
+
+```json
+{
+  "name": "mi-proyecto-nativescript",
+  "version": "1.0.0",
+  "description": "Proyecto NativeScript con Angular - Sistema Avanzado de Tareas",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tu-usuario/mi-proyecto.git"
+  },
+  "scripts": {
+    "android": "ns run android",
+    "ios": "ns run ios",
+    "clean": "ns clean"
+  },
+  "dependencies": {
+    "@angular/animations": "~16.2.0",
+    "@angular/common": "~16.2.0",
+    "@angular/compiler": "~16.2.0",
+    "@angular/core": "~16.2.0",
+    "@angular/forms": "~16.2.0",
+    "@angular/platform-browser": "~16.2.0",
+    "@angular/platform-browser-dynamic": "~16.2.0",
+    "@angular/router": "~16.2.0",
+    "@nativescript/angular": "~16.0.0",
+    "@nativescript/core": "~8.5.0",
+    "@nativescript/theme": "~3.0.2",
+    "@triniwiz/nativescript-toasty": "^3.0.0",
+    "nativescript-ui-sidedrawer": "~9.0.3",
+    "reflect-metadata": "~0.1.13",
+    "rxjs": "~7.8.0",
+    "zone.js": "~0.13.0"
+  },
+  "devDependencies": {
+    "@angular/compiler-cli": "~16.2.0",
+    "@nativescript/android": "8.5.0",
+    "@nativescript/ios": "8.5.0",
+    "@nativescript/types": "~8.5.0",
+    "@nativescript/webpack": "~5.0.0",
+    "@ngtools/webpack": "~16.2.0",
+    "typescript": "~5.1.0"
+  }
+}
+```
+
+---
+
+## tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["ES2020", "dom"],
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["src/*"]
+    }
+  },
+  "exclude": ["node_modules", "platforms"]
+}
+```
+
+---
+
+## App_Resources/Android/src/main/res/values/colors.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ✅ Requisito 10: Personalización de Splash Screen Android -->
+    <color name="ns_primary">#D4A5FF</color>
+    <color name="ns_primaryDark">#B17CE8</color>
+    <color name="ns_accent">#C9F4C9</color>
+    <color name="ns_blue">#BBDEFB</color>
+    
+    <!-- Splash Screen Colors -->
+    <color name="ns_splashscreen_background">#FAF3F0</color>
+    <color name="ns_splashscreen_color">#D4A5FF</color>
+</resources>
+```
+
+---
+
+## App_Resources/Android/src/main/res/drawable/splash_screen.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" android:opacity="opaque">
+    <!-- ✅ Requisito 10: Splash Screen personalizado para Android -->
+    
+    <!-- Background color -->
+    <item android:drawable="@color/ns_splashscreen_background"/>
+    
+    <!-- Logo centered -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/logo"/>
+    </item>
+</layer-list>
+```
+
+---
+
+## App_Resources/Android/src/main/AndroidManifest.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="__PACKAGE__">
+
+    <supports-screens
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:xlargeScreens="true"/>
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application
+        android:name="com.tns.NativeScriptApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name="com.tns.NativeScriptActivity"
+            android:label="@string/title_activity_kimera"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|locale|uiMode"
+            android:theme="@style/LaunchScreenTheme"
+            android:exported="true">
+
+            <meta-data android:name="SET_THEME_ON_LAUNCH" android:resource="@style/AppTheme" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="com.tns.ErrorReportActivity"/>
+    </application>
+</manifest>
+```
+
+---
+
+## App_Resources/Android/src/main/res/values/styles.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ✅ Requisito 10: Tema del Splash Screen personalizado -->
+    <style name="LaunchScreenTheme" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <style name="AppTheme" parent="AppThemeBase">
+        <item name="colorPrimary">@color/ns_primary</item>
+        <item name="colorPrimaryDark">@color/ns_primaryDark</item>
+        <item name="colorAccent">@color/ns_accent</item>
+    </style>
+
+    <style name="AppThemeBase" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="toolbarStyle">@style/NativeScriptToolbarStyle</item>
+        <item name="colorPrimary">@color/ns_primary</item>
+        <item name="colorPrimaryDark">@color/ns_primaryDark</item>
+        <item name="colorAccent">@color/ns_accent</item>
+        <item name="android:datePickerDialogTheme">@style/SpinnerDatePickerDialog</item>
+    </style>
+
+    <style name="NativeScriptToolbarStyle" parent="Widget.AppCompat.Toolbar">
+        <item name="android:background">@color/ns_primary</item>
+        <item name="theme">@style/ThemeOverlay.AppCompat.ActionBar</item>
+        <item name="popupTheme">@style/ThemeOverlay.AppCompat</item>
+    </style>
+
+    <style name="SpinnerDatePickerDialog" parent="android:Theme.Material.Light.Dialog">
+        <item name="android:datePickerStyle">@android:style/Widget.Material.Light.DatePicker</item>
+    </style>
+
+</resources>
+
+
+
+**¡Listo para subir y presentar!** 🎓
